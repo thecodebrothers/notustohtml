@@ -7,7 +7,10 @@ environment:
   sdk: ">=2.7.0 <3.0.0"
 
 dependencies:
-  notus: ^0.1.5
+  notus:
+    git:
+      url: https://github.com/thecodebrothers/zefyr.git
+      path: packages/notus
   quill_delta: ^1.0.2
   html: ^0.14.0
 

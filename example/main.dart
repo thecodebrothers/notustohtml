@@ -10,12 +10,13 @@ void main() {
     [
       {
         "insert": "Hello World!",
+        "attributes": {
+          "color": "#FF0000",
+          "size": 12
+        },
       },
       {
         "insert": "\n",
-        "attributes": {
-          "heading": 1,
-        },
       },
     ],
   );
