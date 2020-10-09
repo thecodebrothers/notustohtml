@@ -364,6 +364,7 @@ class _NotusHtmlDecoder extends Converter<String, Delta> {
       if (element.localName == "li") {
         blockAttributes["block"] = listType;
       }
+
       element.nodes.asMap().forEach((index, node) {
         var next;
         if (index + 1 < element.nodes.length) next = element.nodes[index + 1];
@@ -399,6 +400,20 @@ class _NotusHtmlDecoder extends Converter<String, Delta> {
       if (element.localName == "a") {
         attributes["a"] = element.attributes["href"];
       }
+
+      if ((element.localName == "span" || element.localName == "p") &&
+          element.attributes != null &&
+          element.attributes.containsKey("style")) {
+        var style = element.attributes["style"];
+        var elements = style.split(";");
+        elements.forEach((element) {
+          var attr = element.split(":");
+          if (_supportedElements.containsKey(attr[0])) {
+            attributes[attr[0]] = attr[1];
+          }
+        });
+      }
+
       if (element.children.isEmpty) {
         if (attributes["a"] != null) {
           delta..insert(element.text, attributes);
@@ -438,6 +453,7 @@ class _NotusHtmlDecoder extends Converter<String, Delta> {
     "img": "embed",
     "hr": "embed",
     "size": "span",
-    "color": "span"
+    "color": "span",
+    "span": "span"
   };
 }

@@ -11,6 +11,7 @@ dependencies:
     git:
       url: https://github.com/thecodebrothers/zefyr.git
       path: packages/notus
+  csslib: ^0.16.2
   quill_delta: ^1.0.2
   html: ^0.14.0
 

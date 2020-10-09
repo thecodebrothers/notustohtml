@@ -72,12 +72,12 @@ packages:
     source: hosted
     version: "2.1.5"
   csslib:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: csslib
       url: "https://pub.dartlang.org"
     source: hosted
-    version: "0.16.1"
+    version: "0.16.2"
   glob:
     dependency: transitive
     description:
