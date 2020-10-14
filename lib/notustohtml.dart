@@ -17,12 +17,15 @@ class NotusHtmlCodec extends Codec<Delta, String> {
   Converter<Delta, String> get encoder => _NotusHtmlEncoder();
 }
 
+const kColor = 'color';
+const kFontSize = 'font-size';
+const kTextAlign = 'text-align';
+final pxRegex = RegExp("^[0-9]*[p][t,x]\z");
+
 class _NotusHtmlEncoder extends Converter<Delta, String> {
   static const kBold = 'strong';
   static const kSpan = 'span';
-  static const kColor = 'color';
-  static const kFontSize = 'font-size';
-  static final pxRegex = RegExp("^[0-9]*[p][t,x]\z");
+  static const kParagraph = 'p';
   static const kItalic = 'em';
   static final kSimpleBlocks = <NotusAttribute, String>{
     NotusAttribute.bq: 'blockquote',
@@ -98,30 +101,34 @@ class _NotusHtmlEncoder extends Converter<Delta, String> {
 
     while (iterator.hasNext) {
       final op = iterator.next();
-      final lf = op.data.indexOf('\n');
-      if (lf == -1) {
-        _handleSpan(op.data, op.attributes);
-      } else {
-        var span = StringBuffer();
-        for (var i = 0; i < op.data.length; i++) {
-          if (op.data.codeUnitAt(i) == 0x0A) {
-            if (span.isNotEmpty) {
-              // Write the span if it's not empty.
-              _handleSpan(span.toString(), op.attributes);
+      if (op.data is String) {
+        final data = op.data as String;
+
+        final lf = data.indexOf('\n');
+        if (lf == -1) {
+          _handleSpan(op.data, op.attributes);
+        } else {
+          var span = StringBuffer();
+          for (var i = 0; i < data.length; i++) {
+            if (data.codeUnitAt(i) == 0x0A) {
+              if (span.isNotEmpty) {
+                // Write the span if it's not empty.
+                _handleSpan(span.toString(), op.attributes);
+              }
+              // Close any open inline styles.
+              _handleSpan('', null);
+              _handleLine(op.attributes);
+              span.clear();
+            } else {
+              span.writeCharCode(data.codeUnitAt(i));
             }
-            // Close any open inline styles.
-            _handleSpan('', null);
-            _handleLine(op.attributes);
-            span.clear();
-          } else {
-            span.writeCharCode(op.data.codeUnitAt(i));
+          }
+          // Remaining span
+          if (span.isNotEmpty) {
+            _handleSpan(span.toString(), op.attributes);
           }
         }
-        // Remaining span
-        if (span.isNotEmpty) {
-          _handleSpan(span.toString(), op.attributes);
-        }
-      }
+      } else {}
     }
     _handleBlock(currentBlockStyle); // Close the last block
     return buffer.toString().replaceAll("\n", "<br>");
@@ -135,13 +142,18 @@ class _NotusHtmlEncoder extends Converter<Delta, String> {
     var buffer = StringBuffer();
     // Open heading
     if (style.contains(NotusAttribute.heading)) {
-      _writeAttribute(buffer, style.get<int>(NotusAttribute.heading));
+      _writeAttribute(buffer, style.get<int>(NotusAttribute.heading), style: style);
+    } else if (_containsParagraphAttributes(style)) {
+      _writeParagraphTag(buffer, _getParagraphAttributes(style));
     }
+
     // Write the text itself
     buffer.write(text);
     // Close the heading
     if (style.contains(NotusAttribute.heading)) {
       _writeAttribute(buffer, style.get<int>(NotusAttribute.heading), close: true);
+    } else if (_containsParagraphAttributes(style)) {
+      _writeParagraphTag(buffer, [], close: true);
     }
     return buffer.toString();
   }
@@ -195,7 +207,7 @@ class _NotusHtmlEncoder extends Converter<Delta, String> {
       text = text.trimLeft();
       final padding = ' ' * (originalText.length - text.length);
       if (padding.isNotEmpty) buffer.write(padding);
-      _writeSpanTag(buffer, style.values.where((value) => _isSpanAttribute(value)).toList());
+      _writeSpanTag(buffer, _getSpanAttributes(style));
     }
 
     // Write the text itself
@@ -203,10 +215,12 @@ class _NotusHtmlEncoder extends Converter<Delta, String> {
     return style;
   }
 
+  bool _containsParagraphAttributes(NotusStyle style) => style.contains(NotusAttribute.alignment);
+
   bool _containsSpanAttribute(NotusStyle style) =>
       style.contains(NotusAttribute.color) || style.contains(NotusAttribute.size);
 
-  void _writeAttribute(StringBuffer buffer, NotusAttribute attribute, {bool close = false}) {
+  void _writeAttribute(StringBuffer buffer, NotusAttribute attribute, {bool close = false, NotusStyle style}) {
     if (attribute == NotusAttribute.bold) {
       _writeBoldTag(buffer, close: close);
     } else if (attribute == NotusAttribute.italic) {
@@ -214,11 +228,11 @@ class _NotusHtmlEncoder extends Converter<Delta, String> {
     } else if (attribute.key == NotusAttribute.link.key) {
       _writeLinkTag(buffer, attribute as NotusAttribute<String>, close: close);
     } else if (attribute.key == NotusAttribute.heading.key) {
-      _writeHeadingTag(buffer, attribute as NotusAttribute<int>, close: close);
+      _writeHeadingTag(buffer, attribute as NotusAttribute<int>, close: close, style: style);
     } else if (attribute.key == NotusAttribute.block.key) {
       _writeBlockTag(buffer, attribute as NotusAttribute<String>, close: close);
-    } else if (attribute.key == NotusAttribute.embed.key) {
-      _writeEmbedTag(buffer, attribute as EmbedAttribute, close: close);
+      // } else if (attribute.key == NotusAttribute.embed.key) {
+      //   _writeEmbedTag(buffer, attribute as EmbedAttribute, close: close);
     } else if (_isSpanAttribute(attribute)) {
       _writeSpanTag(buffer, [], close: close);
     } else {
@@ -229,10 +243,33 @@ class _NotusHtmlEncoder extends Converter<Delta, String> {
   bool _isSpanAttribute(NotusAttribute attribute) =>
       attribute.key == NotusAttribute.color.key || attribute.key == NotusAttribute.size.key;
 
+  bool _isParagraphAttribute(NotusAttribute attribute) => attribute.key == NotusAttribute.alignment.key;
+
   void _writeSpanTag(StringBuffer buffer, List<NotusAttribute> attributes, {bool close = false}) {
-    buffer.write(!close
-        ? """<$kSpan style="${attributes.map((e) => _attributeAsStyleParameter(e)).join(";")}" >"""
-        : "</$kSpan>");
+    buffer.write(!close ? """<$kSpan ${_buildStyleAttribute(attributes)}>""" : "</$kSpan>");
+  }
+
+  void _writeParagraphTag(StringBuffer buffer, List<NotusAttribute> attributes, {bool close = false}) {
+    buffer.write(!close ? """<$kParagraph ${_buildStyleAttribute(attributes)}>""" : "</$kParagraph>");
+  }
+
+  List<NotusAttribute> _getParagraphAttributes(NotusStyle style) {
+    if (style == null) {
+      return [];
+    }
+    return style.values.where((value) => _isParagraphAttribute(value)).toList();
+  }
+
+  List<NotusAttribute> _getSpanAttributes(NotusStyle style) {
+    return style.values.where((value) => _isSpanAttribute(value)).toList();
+  }
+
+  String _buildStyleAttribute(List<NotusAttribute> attributes) {
+    if (attributes == null || attributes.isEmpty) {
+      return "";
+    }
+
+    return 'style="${attributes.map((e) => _attributeAsStyleParameter(e)).join(";")}"';
   }
 
   void _writeBoldTag(StringBuffer buffer, {bool close = false}) {
@@ -251,9 +288,12 @@ class _NotusHtmlEncoder extends Converter<Delta, String> {
     }
   }
 
-  void _writeHeadingTag(StringBuffer buffer, NotusAttribute<int> heading, {bool close = false}) {
+  void _writeHeadingTag(StringBuffer buffer, NotusAttribute<int> heading, {bool close = false, NotusStyle style}) {
     var level = heading.value;
-    buffer.write(!close ? "<h$level>" : "</h$level>");
+
+    var attributes = _getParagraphAttributes(style);
+
+    buffer.write(!close ? "<h$level ${_buildStyleAttribute(attributes)}>" : "</h$level>");
   }
 
   void _writeBlockTag(StringBuffer buffer, NotusAttribute<String> block, {bool close = false}) {
@@ -272,20 +312,35 @@ class _NotusHtmlEncoder extends Converter<Delta, String> {
     }
   }
 
-  void _writeEmbedTag(StringBuffer buffer, EmbedAttribute embed, {bool close = false}) {
-    if (close) return;
-    if (embed.type == EmbedType.horizontalRule) {
-      buffer.write("<hr>");
-    } else if (embed.type == EmbedType.image) {
-      buffer.write('<img src="${embed.value["source"]}">');
-    }
-  }
+  // void _writeEmbedTag(StringBuffer buffer, EmbedAttribute embed, {bool close = false}) {
+  //   if (close) return;
+  //   if (embed.type == EmbedType.horizontalRule) {
+  //     buffer.write("<hr>");
+  //   } else if (embed.type == EmbedType.image) {
+  //     buffer.write('<img src="${embed.value["source"]}">');
+  //   }
+  // }
 
   String _attributeAsStyleParameter(NotusAttribute attribute) {
-    if (attribute.key == NotusAttribute.size) {
-      return "font-size:${attribute.value}px";
+    if (attribute.key == NotusAttribute.size.key) {
+      return "font-size: ${attribute.value}px";
+    } else if (attribute.key == NotusAttribute.alignment.key) {
+      var alignment = "";
+      switch (attribute.value) {
+        case 2:
+          alignment = "center";
+          break;
+        case 3:
+          alignment = "right";
+          break;
+        default:
+          alignment = "left";
+          break;
+      }
+
+      return "$kTextAlign: $alignment";
     } else {
-      return "${attribute.key}:${attribute.value}";
+      return "${attribute.key}: ${attribute.value}";
     }
   }
 }
@@ -301,7 +356,7 @@ class _NotusHtmlDecoder extends Converter<String, Delta> {
       if (index + 1 < html.body.nodes.length) next = html.body.nodes[index + 1];
       delta = _parseNode(node, delta, next);
     });
-    if (delta.isNotEmpty && delta.last.data.endsWith("\n")) {
+    if (delta.isNotEmpty && delta.last.data is String && (delta.last.data as String).endsWith("\n")) {
       return delta;
     }
     return delta..insert("\n");
@@ -365,6 +420,10 @@ class _NotusHtmlDecoder extends Converter<String, Delta> {
         blockAttributes["block"] = listType;
       }
 
+      if (element.attributes != null && element.attributes.isNotEmpty) {
+        _extractAttributesFromStyle(element, blockAttributes);
+      }
+
       element.nodes.asMap().forEach((index, node) {
         var next;
         if (index + 1 < element.nodes.length) next = element.nodes[index + 1];
@@ -376,18 +435,18 @@ class _NotusHtmlDecoder extends Converter<String, Delta> {
       return delta;
     } else if (type == "embed") {
       NotusDocument tempdocument;
-      if (element.localName == "img") {
-        delta..insert("\n");
-        tempdocument = NotusDocument.fromDelta(delta);
-        var index = tempdocument.length;
-        tempdocument.format(index - 1, 0, NotusAttribute.embed.image(element.attributes["src"]));
-      }
-      if (element.localName == "hr") {
-        delta..insert("\n");
-        tempdocument = NotusDocument.fromDelta(delta);
-        var index = tempdocument.length;
-        tempdocument.format(index - 1, 0, NotusAttribute.embed.horizontalRule);
-      }
+      // if (element.localName == "img") {
+      //   delta..insert("\n");
+      //   tempdocument = NotusDocument.fromDelta(delta);
+      //   var index = tempdocument.length;
+      //   tempdocument.format(index - 1, 0, NotusAttribute.embed.image(element.attributes["src"]));
+      // }
+      // if (element.localName == "hr") {
+      //   delta..insert("\n");
+      //   tempdocument = NotusDocument.fromDelta(delta);
+      //   var index = tempdocument.length;
+      //   tempdocument.format(index - 1, 0, NotusAttribute.embed.horizontalRule);
+      // }
       return tempdocument.toDelta();
     } else {
       if (attributes == null) attributes = {};
@@ -401,17 +460,15 @@ class _NotusHtmlDecoder extends Converter<String, Delta> {
         attributes["a"] = element.attributes["href"];
       }
 
-      if ((element.localName == "span" || element.localName == "p") &&
+      if ((element.localName == "span" ||
+              element.localName == "p" ||
+              element.localName == "h1" ||
+              element.localName == "h2" ||
+              element.localName == "h3" ||
+              element.localName == "h4") &&
           element.attributes != null &&
           element.attributes.containsKey("style")) {
-        var style = element.attributes["style"];
-        var elements = style.split(";");
-        elements.forEach((element) {
-          var attr = element.split(":");
-          if (_supportedElements.containsKey(attr[0])) {
-            attributes[attr[0]] = attr[1];
-          }
-        });
+        _extractAttributesFromStyle(element, attributes);
       }
 
       if (element.children.isEmpty) {
@@ -438,6 +495,54 @@ class _NotusHtmlDecoder extends Converter<String, Delta> {
     }
   }
 
+  void _extractAttributesFromStyle(Element element, Map<String, dynamic> attributes) {
+    var style = element.attributes["style"];
+    var elements = style.split(";").where((element) => element != null && element.isNotEmpty).toList();
+    elements.forEach((element) {
+      var attr = element.split(":");
+      var key = _adjustKeyFromHtmlToDelta(attr[0]);
+      var value = _adjustValueFromHtmlToDelta(attr[0], attr[1].trim());
+      if (_supportedElements.containsKey(key)) {
+        attributes[key] = value;
+      }
+    });
+  }
+
+  String _adjustKeyFromHtmlToDelta(String key) {
+    switch (key) {
+      case kTextAlign:
+        return NotusAttribute.alignment.key;
+      case kFontSize:
+        return NotusAttribute.size.key;
+      default:
+        return key;
+    }
+  }
+
+  dynamic _adjustValueFromHtmlToDelta(String key, dynamic value) {
+    switch (key) {
+      case kTextAlign:
+        return _mapAlignHtmlToDelta(value);
+      case kFontSize:
+        return value is String && (value.endsWith("pt") || value.endsWith("px"))
+            ? value.substring(0, value.length - 2)
+            : value;
+      default:
+        return value;
+    }
+  }
+
+  int _mapAlignHtmlToDelta(String value) {
+    switch (value) {
+      case "center":
+        return 2;
+      case "right":
+        return 3;
+      default:
+        return 1;
+    }
+  }
+
   Map<String, String> _supportedElements = {
     "li": "block",
     "blockquote": "block",
@@ -454,6 +559,7 @@ class _NotusHtmlDecoder extends Converter<String, Delta> {
     "hr": "embed",
     "size": "span",
     "color": "span",
-    "span": "span"
+    "span": "span",
+    "alignment": "block",
   };
 }

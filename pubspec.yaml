@@ -1,6 +1,6 @@
 name: notustohtml
 description: Convert the Notus document format to an HTML representation.
-version: 0.0.8
+version: 0.0.9
 homepage: https://github.com/JacobWrenn/notustohtml
 
 environment:
@@ -11,8 +11,8 @@ dependencies:
     git:
       url: https://github.com/thecodebrothers/zefyr.git
       path: packages/notus
-  csslib: ^0.16.2
-  quill_delta: ^1.0.2
+      ref: 1.0-dev
+  quill_delta: 2.0.0
   html: ^0.14.0
 
 dev_dependencies:
