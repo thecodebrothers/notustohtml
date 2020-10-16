@@ -12,22 +12,40 @@ void main() {
 
   final alignHtml = """<p style="text-align: center; font-size: 24px;"><span style="color: #ff0000;">Siema</span></p>""";
 
-  final baseDeltaJson =
-      r'[{"insert":"Zefyr 1.0 early dev build", "attributes":{"color":"#FF0000"}},'
-      r'{"insert":"Zefyr 1.0 early dev build"},{"insert":"\n","attributes":{"heading":1, "alignment": 2}},'
-      r'{"insert":{"_type":"hr","_inline":false}}]';
+  // final baseDeltaJson =
+  //     r'[{"insert":"Zefyr 1.0 early dev build", "attributes":{"color":"#FF0000"}},'
+  //     r'{"insert":"Zefyr 1.0 early dev build"},{"insert":"\n","attributes":{"heading":1, "alignment": 2}},'
+  //     r'{"insert":{"_type":"hr","_inline":false}}]';
+  //
+  // var json = jsonDecode(baseDeltaJson);
+  // Delta baseDelta = Delta.fromJson(json);
+  // print(baseDelta);
+  // var converterHtml = converter.encode(baseDelta);
+  // print(converterHtml);
+  //
+  // Delta deltaBack = converter.decode(converterHtml);
+  // var jsonBack = jsonEncode(deltaBack.toJson());
+  // print(jsonBack);
+  //
+  // Delta deltaCheck2 = converter.decode(alignHtml);
+  // print(deltaCheck2);
 
-  var json = jsonDecode(baseDeltaJson);
-  Delta baseDelta = Delta.fromJson(json);
-  print(baseDelta);
-  var converterHtml = converter.encode(baseDelta);
-  print(converterHtml);
+  final html10 = """
+  <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><title>
+		</title>
+		
+	</head>
+	<body>
+		<p style="text-align:left;text-indent:0pt;margin:0pt 0pt 12pt 0pt"><span style="color:#000000;background-color:transparent;font-family:'Times New Roman';font-size:12pt;font-weight:normal;font-style:normal;">Test</span><span style="color:#3DCB96;background-color:transparent;font-family:'Times New Roman';font-size:12pt;font-weight:normal;font-style:normal;">ghh</span><span style="color:#E84444;background-color:transparent;font-family:'Times New Roman';font-size:12pt;font-weight:normal;font-style:normal;">hhhh</span><span style="color:#FFB21D;background-color:transparent;font-family:'Times New Roman';font-size:12pt;font-weight:normal;font-style:normal;">hhhh</span></p></body>
+</html>
+  """;
 
-  Delta deltaBack = converter.decode(converterHtml);
-  var jsonBack = jsonEncode(deltaBack.toJson());
-  print(jsonBack);
-
-  Delta deltaCheck2 = converter.decode(alignHtml);
+  Delta deltaCheck2 = converter.decode(html10);
+  var notus = NotusDocument.fromDelta(deltaCheck2);
+  print(notus);
   print(deltaCheck2);
 
   final html2 = """<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">

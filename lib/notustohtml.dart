@@ -525,8 +525,8 @@ class _NotusHtmlDecoder extends Converter<String, Delta> {
         return _mapAlignHtmlToDelta(value);
       case kFontSize:
         return value is String && (value.endsWith("pt") || value.endsWith("px"))
-            ? value.substring(0, value.length - 2)
-            : value;
+            ? int.tryParse(value.substring(0, value.length - 2))
+            : int.tryParse(value);
       default:
         return value;
     }
@@ -554,7 +554,7 @@ class _NotusHtmlDecoder extends Converter<String, Delta> {
     "em": "inline",
     "strong": "inline",
     "a": "inline",
-    "p": "inline",
+    "p": "block",
     "img": "embed",
     "hr": "embed",
     "size": "span",
